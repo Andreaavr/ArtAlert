@@ -8,6 +8,7 @@ import artalert.fuentes.ClienteHttpJava;
 import artalert.fuentes.FuenteChicago;
 import artalert.fuentes.FuenteCleveland;
 import artalert.fuentes.FuenteConSimulacion;
+import artalert.fuentes.FuenteMet;
 import artalert.fuentes.FuenteObras;
 import artalert.gui.CargadorImagenes;
 import artalert.gui.GeneradorNovedades;
@@ -33,7 +34,7 @@ public class Main {
         ClienteHttp cliente = new ClienteHttpJava();
         Random azar = new Random();
         Map<String, FuenteConSimulacion> museos = new LinkedHashMap<>();
-        for (FuenteObras real : List.of(new FuenteChicago(cliente), new FuenteCleveland(cliente))) {
+        for (FuenteObras real : List.of(new FuenteChicago(cliente), new FuenteCleveland(cliente), new FuenteMet(cliente))) {
             museos.put(real.getNombreMuseo(), new FuenteConSimulacion(real, azar));
         }
         List<FuenteObras> fuentes = List.copyOf(museos.values());
