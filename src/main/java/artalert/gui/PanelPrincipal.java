@@ -1,19 +1,17 @@
 package artalert.gui;
 
 import artalert.artistas.Artista;
-import artalert.artistas.CatalogoArtistas;
 import artalert.artistas.Vigilante;
 import artalert.fuentes.FuenteObras;
 import artalert.modelo.EventoObra;
 import artalert.modelo.Obra;
-import artalert.modelo.TipoEvento;
+import artalert.usuarios.ServicioSeguimiento;
 import artalert.usuarios.Usuario;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -28,7 +26,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
@@ -45,14 +42,15 @@ import java.util.function.Supplier;
  * Pantalla principal de ArtAlert: mis artistas a la izquierda, la galería de obras en el centro
  * y los avisos del patrón Observador a la derecha.
  *
- * <p>Solo se encarga de mostrar y de recoger acciones (SRP); el trabajo lo hacen el catálogo,
- * el vigilante y el usuario, que recibe por constructor (DIP). Las llamadas a los museos se
+ * <p>Solo se encarga de mostrar y de recoger acciones (SRP); el trabajo lo hacen el servicio de
+ * seguimiento, el vigilante y el usuario, que recibe por constructor (DIP). Cómo se dibuja cada
+ * fila está en {@link RenderArtista} y {@link RenderAviso}. Las llamadas a los museos se
  * hacen en segundo plano para que la ventana no se congele.
  */
 public class PanelPrincipal extends JPanel {
 
     private final List<FuenteObras> fuentes;
-    private final CatalogoArtistas catalogo;
+    private final ServicioSeguimiento seguimiento;
     private final Vigilante vigilante;
     private final CargadorImagenes cargador;
     private final GeneradorNovedades generador;
@@ -73,11 +71,11 @@ public class PanelPrincipal extends JPanel {
     /**
      * @param generador para el botón de demostración; si es null, el botón no aparece
      */
-    public PanelPrincipal(List<FuenteObras> fuentes, CatalogoArtistas catalogo, Vigilante vigilante,
+    public PanelPrincipal(List<FuenteObras> fuentes, ServicioSeguimiento seguimiento, Vigilante vigilante,
                           CargadorImagenes cargador, GeneradorNovedades generador, Usuario primerUsuario) {
         super(new BorderLayout());
         this.fuentes = List.copyOf(fuentes);
-        this.catalogo = Objects.requireNonNull(catalogo, "catalogo");
+        this.seguimiento = Objects.requireNonNull(seguimiento, "seguimiento");
         this.vigilante = Objects.requireNonNull(vigilante, "vigilante");
         this.cargador = Objects.requireNonNull(cargador, "cargador");
         this.generador = generador;
@@ -195,7 +193,7 @@ public class PanelPrincipal extends JPanel {
         JPanel columna = columnaLateral();
         columna.add(tituloAvisos, BorderLayout.NORTH);
 
-        listaAvisos.setCellRenderer(new RenderAviso());
+        listaAvisos.setCellRenderer(new RenderAviso(() -> avisosSinLeerMostrados));
         listaAvisos.setBackground(Estilo.PANEL);
         listaAvisos.setFocusable(false);
         columna.add(Estilo.scrollFino(new JScrollPane(listaAvisos)), BorderLayout.CENTER);
@@ -229,24 +227,11 @@ public class PanelPrincipal extends JPanel {
     private void seguirArtista() {
         DialogoSeguir.preguntar(SwingUtilities.getWindowAncestor(this), fuentes).ifPresent(eleccion -> {
             Usuario usuario = usuarioActual();
-            enSegundoPlano("Buscando a " + eleccion.nombreArtista() + " en los museos…", () -> {
-                List<String> mensajes = new ArrayList<>();
-                for (FuenteObras fuente : eleccion.museos()) {
-                    Artista artista = catalogo.obtener(eleccion.nombreArtista(), fuente);
-                    if (artista.getObras().isEmpty()) {
-                        vigilante.comprobar(artista).ifPresent(mensajes::add);
-                    }
-                    if (artista.getObras().isEmpty()) {
-                        mensajes.add("No hay obras de " + eleccion.nombreArtista() + " en " + fuente.getNombreMuseo());
-                    } else if (usuario.seguir(artista)) {
-                        mensajes.add("Ahora sigues a " + artista);
-                    }
-                }
-                return mensajes;
-            }, () -> {
-                refrescarArtistas();
-                seleccionarUltimoArtista();
-            });
+            enSegundoPlano("Buscando a " + eleccion.nombreArtista() + " en los museos…",
+                    () -> seguimiento.seguir(usuario, eleccion.nombreArtista(), eleccion.museos()), () -> {
+                        refrescarArtistas();
+                        seleccionarUltimoArtista();
+                    });
         });
     }
 
@@ -354,7 +339,7 @@ public class PanelPrincipal extends JPanel {
         } else {
             List<Obra> obras = artista.getObras();
             tituloGaleria.setText(artista.getNombre());
-            subtituloGaleria.setText(artista.getMuseo() + "  ·  " + resumen(obras));
+            subtituloGaleria.setText(artista.getMuseo() + "  ·  " + RenderArtista.resumen(obras));
             // Primero las obras con foto; las protegidas por derechos de autor, al final.
             obras.stream()
                     .sorted(Comparator.comparing((Obra obra) -> !obra.tieneImagen()))
@@ -405,11 +390,6 @@ public class PanelPrincipal extends JPanel {
         return etiqueta;
     }
 
-    private static String resumen(List<Obra> obras) {
-        long enSala = obras.stream().filter(Obra::enSala).count();
-        return obras.size() + (obras.size() == 1 ? " obra" : " obras") + "  ·  " + enSala + " en sala";
-    }
-
     /** Galería que ocupa el ancho visible y baja a la fila siguiente (solo scroll vertical). */
     private static class PanelGaleria extends JPanel implements Scrollable {
         PanelGaleria() {
@@ -439,62 +419,6 @@ public class PanelPrincipal extends JPanel {
         @Override
         public boolean getScrollableTracksViewportHeight() {
             return false;
-        }
-    }
-
-    /** Cómo se dibuja cada artista en la lista. */
-    private static class RenderArtista extends DefaultListCellRenderer {
-        @Override
-        public Component getListCellRendererComponent(JList<?> lista, Object valor, int indice,
-                                                      boolean seleccionado, boolean foco) {
-            Artista artista = (Artista) valor;
-            JLabel celda = (JLabel) super.getListCellRendererComponent(lista, valor, indice, seleccionado, false);
-            celda.setText("<html><b style='font-size:11px'>" + TarjetaObra.escapar(artista.getNombre()) + "</b><br>"
-                    + "<span style='color:" + Estilo.hex(Estilo.TINTA_SUAVE) + "'>" + TarjetaObra.escapar(artista.getMuseo()) + "<br>"
-                    + resumen(artista.getObras()) + "</span></html>");
-            celda.setFont(Estilo.NORMAL);
-            celda.setForeground(Estilo.TINTA);
-            celda.setBackground(seleccionado ? Estilo.SELECCION : Estilo.PANEL);
-            celda.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 4, 1, 0, seleccionado ? Estilo.DORADO : Estilo.PANEL),
-                    BorderFactory.createEmptyBorder(10, 10, 10, 6)));
-            return celda;
-        }
-    }
-
-    /** Cómo se dibuja cada aviso: color según el tipo y los no leídos resaltados. */
-    private class RenderAviso extends DefaultListCellRenderer {
-        @Override
-        public Component getListCellRendererComponent(JList<?> lista, Object valor, int indice,
-                                                      boolean seleccionado, boolean foco) {
-            EventoObra evento = (EventoObra) valor;
-            JLabel celda = (JLabel) super.getListCellRendererComponent(lista, valor, indice, false, false);
-            boolean sinLeer = indice < avisosSinLeerMostrados;
-            String color = switch (evento.tipo()) {
-                case NUEVA -> Estilo.hex(Estilo.DORADO);
-                case EXPUESTA -> Estilo.hex(Estilo.VERDE);
-                case RETIRADA -> Estilo.hex(Estilo.ROJO);
-            };
-            celda.setText("<html><span style='color:" + color + ";font-size:9px'><b>"
-                    + etiquetaTipo(evento.tipo()) + "</b></span>" + (sinLeer ? "  <b style='color:" + Estilo.hex(Estilo.DORADO) + "'>•</b>" : "")
-                    + "<br><span style='font-size:11px'>" + TarjetaObra.escapar(evento.obra().titulo()) + "</span><br>"
-                    + "<span style='color:" + Estilo.hex(Estilo.TINTA_SUAVE) + ";font-size:9px'>" + TarjetaObra.escapar(evento.obra().artista())
-                    + "  ·  " + TarjetaObra.escapar(evento.obra().museo()) + "</span></html>");
-            celda.setFont(Estilo.NORMAL);
-            celda.setForeground(Estilo.TINTA);
-            celda.setBackground(sinLeer ? Estilo.SIN_LEER : Estilo.PANEL);
-            celda.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 0, 1, 0, Estilo.BORDE),
-                    BorderFactory.createEmptyBorder(10, 6, 10, 6)));
-            return celda;
-        }
-
-        private String etiquetaTipo(TipoEvento tipo) {
-            return switch (tipo) {
-                case NUEVA -> "NUEVA OBRA";
-                case EXPUESTA -> "AHORA EN SALA";
-                case RETIRADA -> "RETIRADA DE SALA";
-            };
         }
     }
 }

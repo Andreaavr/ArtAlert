@@ -7,6 +7,7 @@ import artalert.observador.Observador;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -14,7 +15,8 @@ import java.util.Set;
  * Puede seguir a ninguno, a uno o a todos los que quiera, de cualquier museo.
  *
  * <p>Responsabilidad (SRP): recordar a quién sigue y guardar los avisos que recibe.
- * No escribe nada por pantalla; eso lo hace el menú.
+ * No muestra nada; eso lo hace la interfaz. Sus métodos están sincronizados porque los avisos
+ * llegan desde el hilo que consulta los museos mientras la ventana los lee.
  */
 public class Usuario implements Observador {
 
@@ -37,7 +39,8 @@ public class Usuario implements Observador {
      *
      * @return false si ya lo seguía
      */
-    public boolean seguir(Artista artista) {
+    public synchronized boolean seguir(Artista artista) {
+        Objects.requireNonNull(artista, "artista");
         if (!seguidos.add(artista)) {
             return false;
         }
@@ -50,7 +53,7 @@ public class Usuario implements Observador {
      *
      * @return false si no lo seguía
      */
-    public boolean dejarDeSeguir(Artista artista) {
+    public synchronized boolean dejarDeSeguir(Artista artista) {
         if (!seguidos.remove(artista)) {
             return false;
         }
@@ -58,37 +61,37 @@ public class Usuario implements Observador {
         return true;
     }
 
-    public boolean sigueA(Artista artista) {
+    public synchronized boolean sigueA(Artista artista) {
         return seguidos.contains(artista);
     }
 
     /** Artistas que sigue (copia de solo lectura; puede estar vacía). */
-    public List<Artista> getSeguidos() {
+    public synchronized List<Artista> getSeguidos() {
         return List.copyOf(seguidos);
     }
 
     // ---------- Patrón Observador ----------
 
     @Override
-    public void actualizar(EventoObra evento) {
-        avisos.add(evento);
+    public synchronized void actualizar(EventoObra evento) {
+        avisos.add(Objects.requireNonNull(evento, "evento"));
     }
 
     // ---------- Avisos ----------
 
     /** Avisos que aún no ha visto, y los marca como vistos. */
-    public List<EventoObra> recogerAvisosNuevos() {
+    public synchronized List<EventoObra> recogerAvisosNuevos() {
         List<EventoObra> nuevos = List.copyOf(avisos.subList(avisosLeidos, avisos.size()));
         avisosLeidos = avisos.size();
         return nuevos;
     }
 
-    public int contarAvisosNuevos() {
+    public synchronized int contarAvisosNuevos() {
         return avisos.size() - avisosLeidos;
     }
 
     /** Todos los avisos recibidos, leídos o no. */
-    public List<EventoObra> getHistorialAvisos() {
+    public synchronized List<EventoObra> getHistorialAvisos() {
         return List.copyOf(avisos);
     }
 
