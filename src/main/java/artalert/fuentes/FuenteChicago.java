@@ -13,7 +13,10 @@ import org.json.JSONObject;
 public class FuenteChicago extends FuenteHttpBase {
 
     private static final String URL_BUSQUEDA = "https://api.artic.edu/api/v1/artworks/search"
-            + "?q=%s&fields=id,title,artist_title,is_on_view&limit=100";
+            + "?q=%s&fields=id,title,artist_title,is_on_view,image_id&limit=100";
+
+    /** Las imágenes se sirven por IIIF a partir del image_id de cada obra. */
+    private static final String URL_IMAGEN = "https://www.artic.edu/iiif/2/%s/full/843,/0/default.jpg";
 
     public FuenteChicago(ClienteHttp cliente) {
         super(cliente);
@@ -34,11 +37,13 @@ public class FuenteChicago extends FuenteHttpBase {
         if (!json.has("id")) {
             return null;
         }
+        String imagenId = json.optString("image_id", "");
         return new Obra(
                 String.valueOf(json.get("id")),
                 json.optString("title", ""),
                 json.optString("artist_title", ""),
                 getNombreMuseo(),
-                json.optBoolean("is_on_view", false));
+                json.optBoolean("is_on_view", false),
+                imagenId.isBlank() ? null : String.format(URL_IMAGEN, imagenId));
     }
 }
