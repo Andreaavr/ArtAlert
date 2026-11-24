@@ -5,8 +5,10 @@ import artalert.modelo.Obra;
 import artalert.modelo.TipoEvento;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Compara las obras que ya se conocían con las que acaba de devolver el museo
@@ -23,7 +25,11 @@ public class ComparadorObras {
      */
     public List<EventoObra> comparar(Map<String, Obra> conocidas, List<Obra> nuevas) {
         List<EventoObra> eventos = new ArrayList<>();
+        Set<String> vistas = new HashSet<>();
         for (Obra nueva : nuevas) {
+            if (!vistas.add(nueva.clave())) {
+                continue; // la API la ha repetido: un solo aviso por obra
+            }
             Obra anterior = conocidas.get(nueva.clave());
             if (anterior == null) {
                 eventos.add(new EventoObra(TipoEvento.NUEVA, nueva));
