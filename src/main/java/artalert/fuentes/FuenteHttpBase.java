@@ -6,8 +6,10 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -20,6 +22,7 @@ import java.util.Objects;
  *   <li>{@link #obtenerResultados(String)}: gancho opcional. Por defecto lee el array "data",
  *       que es lo que devuelven Chicago y Cleveland. The Met lo sobrescribe.</li>
  *   <li>{@link #convertirAObra(JSONObject)}: cómo se traduce su JSON a {@link Obra}.</li>
+ *   <li>{@link #esDelArtista(Obra, String)}: gancho opcional que descarta obras de otros autores.</li>
  * </ol>
  */
 public abstract class FuenteHttpBase implements FuenteObras {
@@ -36,15 +39,31 @@ public abstract class FuenteHttpBase implements FuenteObras {
         if (nombreArtista == null || nombreArtista.isBlank()) {
             return List.of();
         }
-        String url = construirUrl(nombreArtista.trim());
+        String nombre = nombreArtista.trim();
+        String url = construirUrl(nombre);
         List<Obra> obras = new ArrayList<>();
         for (JSONObject json : obtenerResultados(url)) {
             Obra obra = convertirAObra(json);
-            if (obra != null) {
+            if (obra != null && esDelArtista(obra, nombre)) {
                 obras.add(obra);
             }
         }
         return List.copyOf(obras);
+    }
+
+    /**
+     * Gancho: decide si una obra devuelta por la búsqueda es de verdad del artista buscado.
+     * Las APIs buscan por texto y pueden colar obras de otros autores (por ejemplo, un cuadro
+     * cuyo título menciona a Monet). Por defecto compara sin mayúsculas ni tildes.
+     */
+    protected boolean esDelArtista(Obra obra, String nombreBuscado) {
+        return normalizar(obra.artista()).contains(normalizar(nombreBuscado));
+    }
+
+    /** Minúsculas y sin tildes: "Claude MONÉT" → "claude monet". */
+    protected static String normalizar(String texto) {
+        String sinTildes = Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sinTildes.toLowerCase(Locale.ROOT).trim();
     }
 
     /** URL de búsqueda en la API del museo para este artista. */
