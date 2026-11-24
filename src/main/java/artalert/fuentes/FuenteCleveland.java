@@ -18,7 +18,7 @@ import org.json.JSONObject;
 public class FuenteCleveland extends FuenteHttpBase {
 
     private static final String URL_BUSQUEDA = "https://openaccess-api.clevelandart.org/api/artworks/"
-            + "?artists=%s&fields=id,title,creators,current_location&limit=100";
+            + "?artists=%s&fields=id,title,creators,current_location,images&limit=100";
 
     public FuenteCleveland(ClienteHttp cliente) {
         super(cliente);
@@ -45,7 +45,16 @@ public class FuenteCleveland extends FuenteHttpBase {
                 json.optString("title", ""),
                 primerAutor(json.optJSONArray("creators")),
                 getNombreMuseo(),
-                !sala.isBlank());
+                !sala.isBlank(),
+                urlImagen(json.optJSONObject("images")));
+    }
+
+    /** La imagen web viene en images.web.url. */
+    private static String urlImagen(JSONObject imagenes) {
+        if (imagenes == null || imagenes.optJSONObject("web") == null) {
+            return null;
+        }
+        return imagenes.optJSONObject("web").optString("url", "");
     }
 
     /** "Claude Monet (French, 1840–1926)" → "Claude Monet". */

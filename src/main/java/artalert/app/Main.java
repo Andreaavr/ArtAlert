@@ -1,15 +1,23 @@
 package artalert.app;
 
-import artalert.artistas.Artista;
 import artalert.artistas.CatalogoArtistas;
 import artalert.artistas.ComparadorObras;
 import artalert.artistas.Vigilante;
 import artalert.fuentes.ClienteHttp;
 import artalert.fuentes.ClienteHttpJava;
 import artalert.fuentes.FuenteChicago;
+import artalert.fuentes.FuenteCleveland;
+import artalert.fuentes.FuenteConSimulacion;
 import artalert.fuentes.FuenteObras;
+import artalert.gui.CargadorImagenes;
+import artalert.gui.GeneradorNovedades;
+import artalert.gui.VentanaPrincipal;
+import artalert.usuarios.Usuario;
 
+import javax.swing.SwingUtilities;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 /**
  * Punto de entrada de ArtAlert.
@@ -18,23 +26,28 @@ import java.util.List;
 public class Main {
 
     public static void main(String[] args) {
-        System.out.println("ArtAlert: avisos de arte con el patrón Observador");
-
-        // ---- Persona A: fuentes, catálogo y vigilante ----
+        // ---- Persona A: fuentes (decoradas para poder simular novedades), catálogo y vigilante ----
         ClienteHttp cliente = new ClienteHttpJava();
-        List<FuenteObras> fuentes = List.of(new FuenteChicago(cliente));
+        FuenteConSimulacion chicago = new FuenteConSimulacion(new FuenteChicago(cliente), new Random());
+        FuenteConSimulacion cleveland = new FuenteConSimulacion(new FuenteCleveland(cliente), new Random());
+        List<FuenteObras> fuentes = List.of(chicago, cleveland);
         CatalogoArtistas catalogo = new CatalogoArtistas(new ComparadorObras());
         Vigilante vigilante = new Vigilante(catalogo);
 
-        // Prueba rápida mientras no hay menú: seguir a Monet en Chicago y cargar sus obras.
-        Artista monet = catalogo.obtener("Claude Monet", fuentes.get(0));
-        monet.suscribir(evento -> System.out.println("  Aviso: " + evento.descripcion()));
-        vigilante.comprobar(monet).ifPresent(System.out::println);
+        Map<String, FuenteConSimulacion> simuladores = Map.of(
+                chicago.getNombreMuseo(), chicago,
+                cleveland.getNombreMuseo(), cleveland);
+        GeneradorNovedades generador = artista -> simuladores.get(artista.getMuseo())
+                .prepararNovedad(artista.getNombre(), artista.getObras());
 
-        System.out.println(monet + ": " + monet.getObras().size() + " obras");
-        monet.getObras().stream().limit(5).forEach(obra ->
-                System.out.println("  - " + obra.titulo() + (obra.enSala() ? " (en sala)" : "")));
-
-        // ---- Persona B: usuarios y menú ----
+        // ---- Persona B: interfaz gráfica ----
+        SwingUtilities.invokeLater(() -> {
+            VentanaPrincipal.aplicarAspecto();
+            Usuario primero = VentanaPrincipal.preguntarPrimerUsuario();
+            if (primero != null) {
+                new VentanaPrincipal(fuentes, catalogo, vigilante, new CargadorImagenes(), generador, primero)
+                        .setVisible(true);
+            }
+        });
     }
 }
