@@ -1,13 +1,12 @@
 package artalert.fuentes;
 
 import artalert.modelo.Obra;
+import artalert.util.Textos;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -44,12 +43,12 @@ public class FuenteConSimulacion implements FuenteObras {
     }
 
     @Override
-    public List<Obra> buscarPorArtista(String nombreArtista) {
+    public synchronized List<Obra> buscarPorArtista(String nombreArtista) {
         List<Obra> resultado = new ArrayList<>();
         for (Obra obra : fuente.buscarPorArtista(nombreArtista)) {
             resultado.add(salaInvertida.contains(obra.clave()) ? obra.conEnSala(!obra.enSala()) : obra);
         }
-        resultado.addAll(obrasInventadas.getOrDefault(clave(nombreArtista), List.of()));
+        resultado.addAll(obrasInventadas.getOrDefault(Textos.normalizar(nombreArtista), List.of()));
         return List.copyOf(resultado);
     }
 
@@ -59,11 +58,11 @@ public class FuenteConSimulacion implements FuenteObras {
      *
      * @param obrasActuales obras que se conocen ahora del artista (para elegir cuál cambia)
      */
-    public void prepararNovedad(String nombreArtista, List<Obra> obrasActuales) {
+    public synchronized void prepararNovedad(String nombreArtista, List<Obra> obrasActuales) {
         contador++;
         Obra inventada = new Obra("simulada-" + contador, "Obra recién adquirida nº " + contador,
                 nombreArtista, getNombreMuseo(), false);
-        obrasInventadas.computeIfAbsent(clave(nombreArtista), k -> new ArrayList<>()).add(inventada);
+        obrasInventadas.computeIfAbsent(Textos.normalizar(nombreArtista), k -> new ArrayList<>()).add(inventada);
 
         List<Obra> reales = obrasActuales.stream().filter(o -> !o.id().startsWith("simulada-")).toList();
         if (!reales.isEmpty()) {
@@ -72,10 +71,5 @@ public class FuenteConSimulacion implements FuenteObras {
                 salaInvertida.add(elegida);
             }
         }
-    }
-
-    private static String clave(String nombre) {
-        String sinTildes = Normalizer.normalize(nombre, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return sinTildes.toLowerCase(Locale.ROOT).trim();
     }
 }

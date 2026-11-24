@@ -6,7 +6,6 @@ import artalert.modelo.Obra;
 import artalert.observador.Observador;
 import artalert.observador.Sujeto;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,24 +44,28 @@ public class Artista implements Sujeto {
     // ---------- Patrón Observador ----------
 
     @Override
-    public void suscribir(Observador observador) {
+    public synchronized void suscribir(Observador observador) {
         observadores.add(Objects.requireNonNull(observador, "observador"));
     }
 
     @Override
-    public void desuscribir(Observador observador) {
+    public synchronized void desuscribir(Observador observador) {
         observadores.remove(observador);
     }
 
     @Override
     public void notificar(EventoObra evento) {
         // Se recorre una copia por si algún observador se da de baja mientras recibe el aviso.
-        for (Observador observador : List.copyOf(observadores)) {
+        List<Observador> copia;
+        synchronized (this) {
+            copia = List.copyOf(observadores);
+        }
+        for (Observador observador : copia) {
             observador.actualizar(evento);
         }
     }
 
-    public boolean tieneSeguidores() {
+    public synchronized boolean tieneSeguidores() {
         return !observadores.isEmpty();
     }
 
@@ -73,22 +76,26 @@ public class Artista implements Sujeto {
      * La primera vez solo guarda las obras: lo que ya existía no es una novedad.
      */
     public void actualizarObras(List<Obra> obras) {
-        List<EventoObra> eventos = comparador.comparar(obrasConocidas, obras);
-        for (Obra obra : obras) {
-            obrasConocidas.put(obra.clave(), obra);
+        List<EventoObra> eventos;
+        synchronized (this) {
+            eventos = comparador.comparar(obrasConocidas, obras);
+            for (Obra obra : obras) {
+                obrasConocidas.put(obra.clave(), obra);
+            }
+            if (!primeraCargaHecha) {
+                primeraCargaHecha = true;
+                return;
+            }
         }
-        if (!primeraCargaHecha) {
-            primeraCargaHecha = true;
-            return;
-        }
+        // Se avisa fuera del bloqueo, para no retener el artista mientras los observadores trabajan.
         for (EventoObra evento : eventos) {
             notificar(evento);
         }
     }
 
     /** Copia de solo lectura de las obras conocidas (para mostrarlas al usuario). */
-    public List<Obra> getObras() {
-        return List.copyOf(new ArrayList<>(obrasConocidas.values()));
+    public synchronized List<Obra> getObras() {
+        return List.copyOf(obrasConocidas.values());
     }
 
     public String getNombre() {

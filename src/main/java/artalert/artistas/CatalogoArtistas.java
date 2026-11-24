@@ -1,11 +1,10 @@
 package artalert.artistas;
 
 import artalert.fuentes.FuenteObras;
+import artalert.util.Textos;
 
-import java.text.Normalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -27,20 +26,12 @@ public class CatalogoArtistas {
     /** Devuelve el artista de ese museo, creándolo la primera vez que se pide. */
     public Artista obtener(String nombreArtista, FuenteObras fuente) {
         Objects.requireNonNull(fuente, "fuente");
-        String clave = fuente.getNombreMuseo() + "|" + normalizar(nombreArtista);
+        String clave = fuente.getNombreMuseo() + "|" + Textos.normalizar(nombreArtista);
         return artistas.computeIfAbsent(clave, k -> new Artista(nombreArtista, fuente, comparador));
     }
 
     /** Todos los artistas registrados (copia de solo lectura). */
     public List<Artista> getArtistas() {
         return List.copyOf(artistas.values());
-    }
-
-    private static String normalizar(String texto) {
-        if (texto == null) {
-            return "";
-        }
-        String sinTildes = Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return sinTildes.toLowerCase(Locale.ROOT).trim();
     }
 }

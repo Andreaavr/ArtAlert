@@ -1,15 +1,14 @@
 package artalert.fuentes;
 
 import artalert.modelo.Obra;
+import artalert.util.Textos;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -57,13 +56,7 @@ public abstract class FuenteHttpBase implements FuenteObras {
      * cuyo título menciona a Monet). Por defecto compara sin mayúsculas ni tildes.
      */
     protected boolean esDelArtista(Obra obra, String nombreBuscado) {
-        return normalizar(obra.artista()).contains(normalizar(nombreBuscado));
-    }
-
-    /** Minúsculas y sin tildes: "Claude MONÉT" → "claude monet". */
-    protected static String normalizar(String texto) {
-        String sinTildes = Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return sinTildes.toLowerCase(Locale.ROOT).trim();
+        return Textos.normalizar(obra.artista()).contains(Textos.normalizar(nombreBuscado));
     }
 
     /** URL de búsqueda en la API del museo para este artista. */
