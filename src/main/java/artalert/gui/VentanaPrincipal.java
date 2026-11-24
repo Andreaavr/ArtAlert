@@ -1,8 +1,8 @@
 package artalert.gui;
 
-import artalert.artistas.CatalogoArtistas;
 import artalert.artistas.Vigilante;
 import artalert.fuentes.FuenteObras;
+import artalert.usuarios.ServicioSeguimiento;
 import artalert.usuarios.Usuario;
 
 import javax.swing.JFrame;
@@ -13,11 +13,11 @@ import java.util.List;
 /** Ventana de ArtAlert. Pide el nombre del primer usuario y muestra el panel principal. */
 public class VentanaPrincipal extends JFrame {
 
-    public VentanaPrincipal(List<FuenteObras> fuentes, CatalogoArtistas catalogo, Vigilante vigilante,
+    public VentanaPrincipal(List<FuenteObras> fuentes, ServicioSeguimiento seguimiento, Vigilante vigilante,
                             CargadorImagenes cargador, GeneradorNovedades generador, Usuario primerUsuario) {
         super("ArtAlert · Avisos de arte");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setContentPane(new PanelPrincipal(fuentes, catalogo, vigilante, cargador, generador, primerUsuario));
+        setContentPane(new PanelPrincipal(fuentes, seguimiento, vigilante, cargador, generador, primerUsuario));
         setMinimumSize(new Dimension(1100, 680));
         setSize(1320, 820);
         setLocationRelativeTo(null);

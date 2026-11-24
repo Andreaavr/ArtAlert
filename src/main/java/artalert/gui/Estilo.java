@@ -49,6 +49,11 @@ public final class Estilo {
     public static final Font PEQUENA = new Font(Font.SANS_SERIF, Font.PLAIN, 11);
     public static final Font OBRA = new Font(Font.SERIF, Font.PLAIN, 14);
 
+    /** Prepara un texto para meterlo en las etiquetas HTML de Swing. */
+    public static String escapar(String texto) {
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     /** Color en formato #RRGGBB, para el texto HTML de las listas. */
     public static String hex(Color color) {
         return String.format("#%06X", color.getRGB() & 0xFFFFFF);

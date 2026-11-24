@@ -50,7 +50,7 @@ public class TarjetaObra extends JPanel {
         add(imagen, BorderLayout.NORTH);
 
         JLabel titulo = new JLabel("<html><div style='width:" + (ANCHO_IMAGEN - 4) + "px'>"
-                + escapar(obra.titulo()) + "</div></html>");
+                + Estilo.escapar(obra.titulo()) + "</div></html>");
         titulo.setFont(Estilo.OBRA);
         titulo.setForeground(Estilo.TINTA);
         titulo.setVerticalAlignment(SwingConstants.TOP);
@@ -74,10 +74,6 @@ public class TarjetaObra extends JPanel {
         g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
         g2.dispose();
         super.paintComponent(g);
-    }
-
-    static String escapar(String texto) {
-        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /** Pequeña etiqueta redondeada de color. */
