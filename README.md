@@ -1,39 +1,49 @@
 # ArtAlert
 
-Aplicación de consola en Java que avisa a cada usuario de lo que pasa con los artistas que sigue en varios museos: obras nuevas en la colección, obras que salen a sala y obras que se retiran. El usuario elige libremente qué artistas sigue y en qué museos: ninguno, uno o todos los que quiera.
+Aplicación de escritorio en Java (Swing) que avisa a cada usuario de lo que pasa con los artistas que sigue en varios museos: **obras nuevas** en la colección, obras que **salen a sala** y obras que **se retiran**. Cada usuario elige libremente qué artistas sigue y en qué museos: ninguno, uno o todos.
 
-Museos (APIs públicas, sin clave):
+Práctica 7 de Diseño y Análisis de Patrones (ULL).
 
-| Museo | Clase |
-|---|---|
-| Art Institute of Chicago | `FuenteChicago` |
-| Cleveland Museum of Art | `FuenteCleveland` |
-| The Metropolitan Museum of Art | `FuenteMet` |
+## Museos
+
+APIs públicas y sin clave:
+
+| Museo | Clase | Cómo se sabe si está en sala |
+|---|---|---|
+| Art Institute of Chicago | `FuenteChicago` | campo `is_on_view` |
+| Cleveland Museum of Art | `FuenteCleveland` | `current_location` tiene valor |
+| The Metropolitan Museum of Art | `FuenteMet` | búsqueda con el filtro `isOnView=true` |
 
 ## Patrones de diseño
 
-- **Observador (principal).** `Artista` es el sujeto y `Usuario` el observador. Cada artista de cada museo es un sujeto distinto: "Monet en Chicago" y "Monet en The Met" se siguen por separado.
-- **Estrategia.** `FuenteObras` es la estrategia para obtener obras, y cada museo es una implementación intercambiable.
-- **Plantilla.** `FuenteHttpBase.buscarPorArtista()` fija los pasos (URL → petición → JSON → `Obra`). Cada museo solo implementa lo que le diferencia.
-- **Decorador (opcional).** `FuenteConCache` envuelve cualquier fuente para no repetir llamadas a la API.
+| Patrón | Dónde | Qué aporta |
+|---|---|---|
+| **Observador** (principal) | `Artista` es el sujeto y `Usuario` el observador | Cada usuario recibe solo los avisos de los artistas que sigue, sin que `Artista` sepa nada de `Usuario`. "Monet en Chicago" y "Monet en The Met" son sujetos distintos. |
+| **Estrategia** | `FuenteObras`, con una implementación por museo | El usuario elige los museos y cada uno se consulta a su manera. El resto del programa no sabe de qué museo se trata. |
+| **Plantilla** | `FuenteHttpBase.buscarPorArtista()` (`final`) | Fija los pasos (URL → petición → JSON → `Obra` → filtro por artista). Cada museo solo implementa lo que le diferencia. The Met sobrescribe el gancho `obtenerResultados()` porque necesita varias llamadas. |
+| **Decorador** | `FuenteConSimulacion` | Envuelve cualquier museo y permite simular novedades para la demostración (en un museo real los cambios tardan semanas), sin modificar las fuentes reales. |
 
-## Principios SOLID: normas para todo el código
+No se usan **Estado** ni **Abstract Factory**: una obra solo tiene dos estados (en sala o no) y no hay familias de objetos que crear juntos, así que solo añadirían complejidad.
 
-| Principio | Cómo se aplica en ArtAlert |
+### Cómo funciona el Observador
+
+1. El usuario sigue a un artista en uno o varios museos (`ServicioSeguimiento`). El catálogo devuelve siempre el mismo objeto `Artista` para cada artista y museo, así que todos sus seguidores comparten sujeto.
+2. La primera carga de obras no avisa de nada: lo que ya existía no es una novedad.
+3. Al comprobar novedades, el `Vigilante` pide al museo las obras **solo de los artistas que tienen seguidores**.
+4. El `Artista` compara lo que conocía con lo nuevo (`ComparadorObras`) y llama a `notificar()`, que avisa a cada `Usuario` suscrito con un `EventoObra` (NUEVA, EXPUESTA o RETIRADA).
+5. `Artista` y `Usuario` están sincronizados, porque las comprobaciones se hacen en segundo plano mientras la ventana lee los avisos.
+
+## Principios SOLID
+
+| Principio | Cómo se aplica |
 |---|---|
-| **S**: responsabilidad única | Cada clase hace una cosa. `Artista` gestiona sus suscriptores; comparar obras viejas con nuevas lo hace `ComparadorObras`; las peticiones HTTP las hace `ClienteHttp`; `Main` solo crea y conecta objetos. |
-| **O**: abierto/cerrado | Un museo nuevo es una clase nueva que hereda de `FuenteHttpBase`. No se toca nada de lo que ya funciona. |
-| **L**: sustitución de Liskov | Toda `FuenteObras` cumple el mismo contrato: nunca devuelve `null` (como mucho, una lista vacía) y, si el museo falla, lanza `FuenteNoDisponibleException`. El método plantilla es `final`. |
-| **I**: segregación de interfaces | Interfaces pequeñas: `Observador` tiene un método; `Sujeto`, tres; `FuenteObras`, dos. |
-| **D**: inversión de dependencias | Las clases dependen de interfaces (`Observador`, `FuenteObras`, `ClienteHttp`) y las reciben por constructor. Nada de `new FuenteChicago()` dentro de la lógica: eso solo se hace en `Main`. |
+| **S**: responsabilidad única | Cada clase hace una cosa: `Artista` gestiona sus observadores, `ComparadorObras` decide qué ha cambiado, `Vigilante` consulta los museos, `ServicioSeguimiento` aplica la regla de seguir, `PanelPrincipal` solo muestra y cada lista tiene su propio renderizador. `Main` solo crea y conecta objetos. |
+| **O**: abierto/cerrado | Añadir The Met solo ha necesitado una clase nueva y una línea en `Main`. Las novedades simuladas se añaden con un decorador, sin tocar las fuentes. |
+| **L**: sustitución de Liskov | Toda `FuenteObras` cumple el mismo contrato: nunca devuelve `null` y, si el museo falla, lanza `FuenteNoDisponibleException`. El decorador se comporta igual que la fuente que envuelve mientras no se simula nada. |
+| **I**: segregación de interfaces | Interfaces pequeñas: `Observador` (1 método), `Sujeto` (3), `FuenteObras` (2), `ClienteHttp` (1), `GeneradorNovedades` (1). La interfaz gráfica no conoce `FuenteConSimulacion`, solo `GeneradorNovedades`. |
+| **D**: inversión de dependencias | Las clases reciben sus dependencias por constructor y dependen de interfaces (`Observador`, `FuenteObras`, `ClienteHttp`). Gracias a eso las pruebas usan museos y clientes HTTP falsos, sin internet. |
 
-Reglas prácticas:
-- Inyectar las dependencias por constructor, nunca crearlas dentro de la clase.
-- No usar `instanceof` para distinguir museos ni usuarios: si hace falta, falta un método en la interfaz.
-- Nada de `static` con estado (sin Singletons).
-- Las listas que se devuelven son de solo lectura (`List.copyOf`).
-
-## Diagrama
+## Diagrama UML
 
 ![UML general](docs/UML_ArtAlert_general.png)
 
@@ -41,39 +51,43 @@ Reglas prácticas:
 
 ```
 src/main/java/artalert/
-├── modelo/       Obra, EventoObra, TipoEvento                  (compartido)
-├── observador/   Sujeto, Observador                            (compartido)
-├── fuentes/      FuenteObras, FuenteHttpBase, ClienteHttp,
-│                 ClienteHttpJava, FuenteNoDisponibleException  (compartido)
-│                 FuenteChicago                                  (Persona A)
-│                 FuenteCleveland                                (Persona B)
-│                 FuenteMet                                      (tras el primer merge)
-├── artistas/     Artista, ComparadorObras, CatalogoArtistas,
-│                 Vigilante                                      (Persona A)
-├── usuarios/     Usuario                                        (Persona B)
-└── app/          Main, MenuConsola                              (Persona B; A añade su parte en Main)
+├── modelo/       Obra, EventoObra, TipoEvento
+├── observador/   Sujeto, Observador
+├── fuentes/      FuenteObras, FuenteHttpBase, ClienteHttp, ClienteHttpJava,
+│                 FuenteNoDisponibleException, FuenteChicago, FuenteCleveland,
+│                 FuenteMet, FuenteConSimulacion
+├── artistas/     Artista, ComparadorObras, CatalogoArtistas, Vigilante
+├── usuarios/     Usuario, ServicioSeguimiento
+├── util/         Textos
+├── gui/          VentanaPrincipal, PanelPrincipal, DialogoNombre, DialogoSeguir,
+│                 TarjetaObra, RenderArtista, RenderAviso, Estilo,
+│                 CargadorImagenes, DisposicionFluida, GeneradorNovedades
+└── app/          Main
 ```
 
-## Reparto
+## Reparto del trabajo
 
-### Persona A: rama `feature/sujeto-api`
-1. `artistas/ComparadorObras`: recibe las obras conocidas y las nuevas y devuelve la lista de `EventoObra` (NUEVA, EXPUESTA, RETIRADA).
-2. `artistas/Artista implements Sujeto`: suscriptores sin duplicados, `notificar()`, `tieneSeguidores()` y `actualizarObras()` (usa `ComparadorObras`). La primera carga no avisa de nada; solo guarda lo que ya existe.
-3. `artistas/CatalogoArtistas`: devuelve siempre la misma instancia para cada artista y museo.
-4. `artistas/Vigilante`: recorre el catálogo y, solo para los artistas con seguidores, pide las obras a su fuente. Si un museo falla, lo indica y sigue con los demás.
-5. `fuentes/FuenteChicago extends FuenteHttpBase`: usa el campo `is_on_view` para saber si está en sala.
-6. En `Main`: crear las fuentes, el catálogo y el vigilante.
+Se ha trabajado como dos personas sobre el mismo repositorio. Cada una tiene su rama (`persona-a`, `persona-b`), integra su trabajo en `develop` mediante Pull Requests y `master` solo recibe el resultado final.
 
-### Persona B: rama `feature/observadores`
-1. `usuarios/Usuario implements Observador`: `seguir()` y `dejarDeSeguir()` (suscribe y desuscribe en el artista), `getSeguidos()` y el panel de avisos. Seguir a cero artistas es válido.
-2. `app/MenuConsola`: elegir museo, buscar artista, seguir, dejar de seguir, ver mis artistas, ver avisos y comprobar novedades.
-3. `fuentes/FuenteCleveland extends FuenteHttpBase`.
-4. En `Main`: crear los usuarios y lanzar el menú.
-
-### Después del primer merge
-- `fuentes/FuenteMet`: sobrescribe el gancho `obtenerResultados()` porque necesita dos llamadas, primero los ids y luego cada obra.
-- Opcional: `fuentes/FuenteConCache` (Decorador).
+| PR | Persona | Contenido |
+|---|---|---|
+| #1 | A | `Artista` (sujeto), `ComparadorObras`, `CatalogoArtistas`, `Vigilante`, `FuenteChicago` |
+| #2 | B | `Usuario` (observador), `FuenteCleveland` |
+| #3 | A | Decorador `FuenteConSimulacion` e imagen en `Obra` |
+| #4 | B | Interfaz gráfica e imágenes de las obras |
+| #5 | A | Revisión SOLID y del Observador (código compartido, avisos sin duplicar, sincronización) |
+| #6 | B | Revisión SOLID (`ServicioSeguimiento`, renderizadores) |
+| #7 | A | `FuenteMet` |
+| #8 | B | The Met en la aplicación |
+| #9 | A | Arreglo de The Met (menos peticiones, evita el error 403) |
 
 ## Cómo ejecutar
 
-Abrir la carpeta en IntelliJ IDEA (detecta el `pom.xml`), esperar a que Maven descargue las dependencias y ejecutar `artalert.app.Main`. Las pruebas están en `src/test/java`.
+1. Abrir la carpeta en IntelliJ IDEA (detecta el `pom.xml`) y esperar a que Maven descargue las dependencias.
+2. Ejecutar `artalert.app.Main`.
+3. Escribir un nombre, pulsar **+ Seguir artista** y elegir artista y museos.
+4. Para ver el Observador en acción: seleccionar un artista, pulsar **✦ Simular novedad** y después **↻ Comprobar novedades**.
+
+Consejo: los artistas de dominio público (Monet, Van Gogh, Renoir…) muestran todas sus imágenes. Las obras con derechos de autor salen sin foto porque los museos no la publican.
+
+Las pruebas están en `src/test/java` (clic derecho en `test` → *Run 'All Tests'*).
